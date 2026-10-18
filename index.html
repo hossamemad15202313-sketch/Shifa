@@ -54,13 +54,27 @@ try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
 const DP=[{id:1,n:'مختوم (عسل في الشمع)',u:'كيلو',s:15,pr:500,m:3},{id:2,n:'تمر سكري',u:'كيلو',s:40,pr:120,m:8},{id:3,n:'تمر مجدول',u:'كيلو',s:20,pr:250,m:5},{id:4,n:'بلح أحمر',u:'كيلو',s:30,pr:60,m:6}];
 S=S||{p:DP,c:[],o:[],a:[],id:10};
 if(!S.o.length&&S.p.length==4&&S.p[0].n=='عسل سدر')S.p=DP;
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const SU='https://bmkzvnwmkvbydakogiab.supabase.co',SK='sb_publishable__5FnKot5wWYQLTwN4clZ2g_lhy80fIz';
+let SES=null,ST='محلي',last='',tm=0;
+try{SES=JSON.parse(localStorage.getItem('shifa_ses'))}catch(e){}
+const H=()=>({apikey:SK,Authorization:'Bearer '+(SES?SES.access_token:SK),'Content-Type':'application/json'});
+async function auth(body,gt){const r=await fetch(SU+'/auth/v1/token?grant_type='+gt,{method:'POST',headers:{apikey:SK,'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||j.msg||'Invalid');j.exp=Date.now()+j.expires_in*1000-60000;SES=j;try{localStorage.setItem('shifa_ses',JSON.stringify(j))}catch(e){}return j}
+async function tok(){if(SES&&Date.now()>SES.exp)await auth({refresh_token:SES.refresh_token},'refresh_token')}
+async function pull(){await tok();const r=await fetch(SU+'/rest/v1/shifa_state?id=eq.main&select=data',{headers:H()});if(!r.ok)throw new Error('pull '+r.status);const j=await r.json();return j[0]?j[0].data:null}
+async function push(){await tok();const r=await fetch(SU+'/rest/v1/shifa_state',{method:'POST',headers:Object.assign(H(),{Prefer:'resolution=merge-duplicates'}),body:JSON.stringify({id:'main',data:S,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error('push '+r.status)}
+function upd(){const b=document.getElementById('sy');if(b)b.textContent='☁️ '+ST+' · خروج'}
+function save(){const j=JSON.stringify(S);try{localStorage.setItem(K,j)}catch(e){}if(!SES||j==last)return;last=j;ST='بيحفظ...';clearTimeout(tm);tm=setTimeout(async()=>{try{await push();ST='اتحفظ ✓'}catch(e){ST='فشل الحفظ ⚠️';last=''}upd()},700)}
+function loginV(){$('nv').innerHTML='';$('app').innerHTML=`<div class="card" style="max-width:380px;margin:30px auto"><h3>🔐 تسجيل الدخول</h3><input id="le" type="email" placeholder="الإيميل" style="width:100%"><input id="lp" type="password" placeholder="الباسورد" style="width:100%" onkeydown="if(event.key=='Enter')doLogin()"><button class="btn" style="width:100%;margin-top:8px" onclick="doLogin()">دخول</button><small id="lm"></small></div>`}
+async function doLogin(){$('lm').textContent='ثواني...';try{await auth({email:$('le').value.trim(),password:$('lp').value},'password');boot()}catch(e){$('lm').textContent='الإيميل أو الباسورد غلط'}}
+function logout(){if(!confirm('تسجلي خروج؟'))return;SES=null;last='';try{localStorage.removeItem('shifa_ses');localStorage.removeItem(K)}catch(e){}loginV()}
+async function boot(){if(!SES)return loginV();try{const d=await pull();if(d){S=d}else{await push()}last=JSON.stringify(S);ST='اتحفظ ✓'}catch(e){if(/401|403|JWT|efresh|Invalid/.test(e.message)){SES=null;try{localStorage.removeItem('shifa_ses')}catch(x){}return loginV()}ST='أوفلاين ⚠️'}V()}
+document.addEventListener('visibilitychange',async()=>{if(document.visibilityState!='visible'||!SES||JSON.stringify(S)!=last)return;try{const d=await pull();if(d&&JSON.stringify(d)!=last){S=d;last=JSON.stringify(S);V()}}catch(e){}})
 const uid=()=>++S.id,$=i=>document.getElementById(i),today=()=>new Date().toISOString().slice(0,10);
 const n2=n=>(+n||0).toLocaleString('ar-EG'),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 const TABS=[['d','🏠 الرئيسية'],['c','👥 العملاء'],['o','🧾 الطلبات'],['i','📦 المخزون'],['a','📅 المواعيد'],['w','📣 العروض']];
 let T='d',D={c:'',r:[{p:'',q:1}]},Q=[],qi=0,OT='';
 function go(t){T=t;V()}
-function V(){$('nv').innerHTML=TABS.map(t=>`<button class="${T==t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');$('app').innerHTML=({d:vd,c:vc,o:vo,i:vi,a:va,w:vw})[T]();save()}
+function V(){$('nv').innerHTML=TABS.map(t=>`<button class="${T==t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('')+`<button id="sy" onclick="logout()">☁️ ${ST} · خروج</button>`;$('app').innerHTML=({d:vd,c:vc,o:vo,i:vi,a:va,w:vw})[T]();save()}
 const pn=id=>(S.p.find(p=>p.id==id)||{n:'؟',u:''}),cn=id=>(S.c.find(c=>c.id==id)||{n:'عميل اتمسح'}).n;
 function cs(c){const os=S.o.filter(o=>o.c==c.id);let q=0,t=0,l='';os.forEach(o=>{o.it.forEach(i=>q+=i.q);t+=o.t;if(o.d>l)l=o.d});return{n:os.length,q,t,l}}
 const badge=n=>n>=2?'<span class="b old">عميل قديم</span>':'<span class="b new">عميل جديد</span>';
@@ -109,5 +123,5 @@ return `<div class="card"><h3>📣 ابعتي عرض لجروب العملاء</
 ${Q.length?`<div class="card"><h3>جاري الإرسال (${n2(qi)} من ${n2(Q.length)})</h3>${qi<Q.length?`<button class="btn" onclick="nextQ()">ابعت لـ ${esc(Q[qi].n)} ➜</button>`:'<span class="ok">خلصنا! العرض اتبعت للكل ✅</span>'}<p><small>واتساب بيمنع فتح كذا نافذة مرة واحدة، فكل ضغطة بتفتح محادثة العميل والرسالة جاهزة وانتي تدوسي إرسال. للإرسال التلقائي الكامل من غير ضغط محتاجين WhatsApp Business API.</small></p></div>`:''}`}
 function startQ(){OT=$('ot').value;Q=S.c.filter(c=>c.p&&c.g!==false);qi=0;if(!Q.length)return alert('مفيش عملاء عندهم أرقام في الجروب');V()}
 function nextQ(){const c=Q[qi++];window.open(wa(c.p,OT.replace(/\{الاسم\}/g,c.n)),'_blank');V()}
-V();
+boot();
 </script></body></html>
